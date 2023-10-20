@@ -1,0 +1,142 @@
+{
+  "name": "kafka_high_watermark_lag_incident",
+  "description": "Kafka High Watermark Lag Incident is an incident that occurs in a Kafka environment when the high watermark, which is the highest offset that has been replicated to all in-sync replicas, lags behind the low watermark, which is the offset of the last message written to the partition. This happens when Kafka consumers are not consuming messages at the same rate as they are being produced, causing a backlog of messages that have not been processed. This lag can lead to data loss, as messages that have not been replicated to all in-sync replicas may be lost if a replica fails. It is important to monitor Kafka high watermark lag and take corrective actions to ensure that it does not exceed a certain threshold.",
+  "params": [
+    {
+      "name": "ZOOKEEPER_HOST",
+      "value": ""
+    },
+    {
+      "name": "TOPIC_NAME",
+      "value": ""
+    },
+    {
+      "name": "PARTITION_NUMBER",
+      "value": ""
+    },
+    {
+      "name": "BOOTSTRAP_SERVER",
+      "value": ""
+    },
+    {
+      "name": "BROKER_LIST",
+      "value": ""
+    },
+    {
+      "name": "NUMBER_OF_PARTITIONS",
+      "value": ""
+    },
+    {
+      "name": "THRESHOLD",
+      "value": ""
+    },
+    {
+      "name": "ZOOKEEPER_PORT",
+      "value": ""
+    },
+    {
+      "name": "HOST_NAME",
+      "value": ""
+    },
+    {
+      "name": "K8S_CLUSTER_NAME",
+      "value": ""
+    },
+    {
+      "name": "NAMESPACE",
+      "value": ""
+    }
+  ],
+  "cells": [
+    {
+      "name": "cell_1",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## Kafka High Watermark Lag Incident\nKafka High Watermark Lag Incident is an incident that occurs in a Kafka environment when the high watermark, which is the highest offset that has been replicated to all in-sync replicas, lags behind the low watermark, which is the offset of the last message written to the partition. This happens when Kafka consumers are not consuming messages at the same rate as they are being produced, causing a backlog of messages that have not been processed. This lag can lead to data loss, as messages that have not been replicated to all in-sync replicas may be lost if a replica fails. It is important to monitor Kafka high watermark lag and take corrective actions to ensure that it does not exceed a certain threshold."
+    },
+    {
+      "name": "cell_2",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## List all topics in Kafka"
+    },
+    {
+      "name": "cell_3",
+      "type": "OP_LANG",
+      "enabled": true,
+      "content": "(host | host_name=$HOST_NAME) union (pod | k8s_cluster_name=$K8S_CLUSTER_NAME | namespace=$NAMESPACE) | `kafka-topics.sh --bootstrap-server ${BOOTSTRAP_SERVER} --list`"
+    },
+    {
+      "name": "cell_4",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## Describe a topic to get its configuration, including replication factor and partition count"
+    },
+    {
+      "name": "cell_5",
+      "type": "OP_LANG",
+      "enabled": true,
+      "content": "(host | host_name=$HOST_NAME) union (pod | k8s_cluster_name=$K8S_CLUSTER_NAME | namespace=$NAMESPACE) | `kafka-topics.sh --bootstrap-server ${BOOTSTRAP_SERVER} --describe --topic ${TOPIC_NAME}`"
+    },
+    {
+      "name": "cell_6",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## Get the current high watermark for a partition"
+    },
+    {
+      "name": "cell_7",
+      "type": "OP_LANG",
+      "enabled": true,
+      "content": "(host | host_name=$HOST_NAME) union (pod | k8s_cluster_name=$K8S_CLUSTER_NAME | namespace=$NAMESPACE) | `kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list ${BROKER_LIST} --topic ${TOPIC_NAME} --partition ${PARTITION_NUMBER} --time -1 --offsets 1 | awk -F \":\" '{print $3}'`"
+    },
+    {
+      "name": "cell_8",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## Get the current low watermark for a partition"
+    },
+    {
+      "name": "cell_9",
+      "type": "OP_LANG",
+      "enabled": true,
+      "content": "(host | host_name=$HOST_NAME) union (pod | k8s_cluster_name=$K8S_CLUSTER_NAME | namespace=$NAMESPACE) | `kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list ${BROKER_LIST} --topic ${TOPIC_NAME} --partition ${PARTITION_NUMBER} --time -2 --offsets 1 | awk -F \":\" '{print $3}'`"
+    },
+    {
+      "name": "cell_10",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## Get the lag for a partition by subtracting the high watermark from the low watermark"
+    },
+    {
+      "name": "cell_11",
+      "type": "OP_LANG",
+      "enabled": true,
+      "content": "(host | host_name=$HOST_NAME) union (pod | k8s_cluster_name=$K8S_CLUSTER_NAME | namespace=$NAMESPACE) | `lag=$(($(kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list ${BROKER_LIST} --topic ${TOPIC_NAME} --partition ${PARTITION_NUMBER} --time -2 --offsets 1 | awk -F \":\" '{print $3}') - $(kafka-run-class.sh kafka.tools.GetOffsetShell --broker-list ${BROKER_LIST} --topic ${TOPIC_NAME} --partition ${PARTITION_NUMBER} --time -1 --offsets 1 | awk -F \":\" '{print $3}')))`"
+    },
+    {
+      "name": "cell_12",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## Check if the lag for a partition exceeds a certain threshold"
+    },
+    {
+      "name": "cell_13",
+      "type": "OP_LANG",
+      "enabled": true,
+      "content": "host | host_name=$HOST_NAME | invoke_check_lag_threshold($TOPIC_NAME, $PARTITION_NUMBER, $THRESHOLD)"
+    },
+    {
+      "name": "cell_14",
+      "type": "MARKDOWN",
+      "enabled": true,
+      "content": "## Increase the replication factor to ensure that messages are replicated to more in-sync replicas."
+    },
+    {
+      "name": "cell_15",
+      "type": "OP_LANG",
+      "enabled": true,
+      "content": "host | host_name=$HOST_NAME | invoke_kafka_replication($ZOOKEEPER_HOST, $NUMBER_OF_PARTITIONS, $ZOOKEEPER_PORT)"
+    }
+  ]
+}
